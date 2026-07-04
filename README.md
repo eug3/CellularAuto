@@ -1,3 +1,5 @@
+**简体中文版请见 [README_zh.md](README_zh.md) | English version below.**
+
 # Growing Neural Cellular Automata (PyTorch)
 
 A faithful PyTorch reproduction of **Mordvintsev, Randazzo, Niklasson & Levin
