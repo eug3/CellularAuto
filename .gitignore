@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+
+# Scratch / debug output (per project convention, kept local)
+.temp/
+out_frames/
+
+# Trained models are large; keep the directory but ignore stray .pth files
+# (committed sample models live in models/ and may be force-added).
+models/*.pth
+models/*_loss.json
