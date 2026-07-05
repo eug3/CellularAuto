@@ -30,7 +30,10 @@ from train import DEFAULT_EPOCHS, load_model, save_model, train
 
 def cmd_train(args):
     device = get_device(args.device)
-    target = load_target(args.image, device=device)
+    kwargs = {"device": device}
+    if args.target_size is not None:
+        kwargs["target_size"] = args.target_size
+    target = load_target(args.image, **kwargs)
     save_path = args.save
     if save_path is None:
         base = os.path.splitext(os.path.basename(args.image))[0]
@@ -48,7 +51,10 @@ def cmd_train(args):
 
 def cmd_play(args):
     device = get_device(args.device)
-    target = load_target(args.image, device=device)
+    load_kwargs = {"device": device}
+    if args.target_size is not None:
+        load_kwargs["target_size"] = args.target_size
+    target = load_target(args.image, **load_kwargs)
     if args.model is None:
         raise SystemExit("--play requires --model <path>.")
     from ca_model import CAModel
@@ -71,7 +77,10 @@ def cmd_staged_train(args):
                              DEFAULT_THRESHOLD, N_STAGE, SCHEDULE_NAME,
                              train_staged)
     device = get_device(args.device)
-    targets = load_stage_targets(args.image, n_stages=args.stages, device=device)
+    load_kwargs = {"device": device}
+    if args.target_size is not None:
+        load_kwargs["target_size"] = args.target_size
+    targets = load_stage_targets(args.image, n_stages=args.stages, **load_kwargs)
 
     save_path = args.save or os.path.join("models", f"{DEFAULT_SAVE_NAME}.pth")
     schedule_path = os.path.join(
@@ -127,6 +136,9 @@ def main():
     parser.add_argument("--image", help="path to target image")
     parser.add_argument("--device", default="auto",
                         choices=["auto", "mps", "cuda", "cpu"])
+    parser.add_argument("--target-size", type=int, default=None,
+                        help="target image square size in px (default: image_utils.TARGET_SIZE). "
+                             "Smaller = faster training. Distill original is 40, project default 128")
     sub = parser.add_argument_group("headless modes")
     sub.add_argument("--train", action="store_true",
                      help="train a model on --image without opening the GUI")

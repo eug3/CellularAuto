@@ -95,17 +95,20 @@ def train_step(ca: CAModel,
                step_lo: int = TRAIN_STEPS_LO,
                step_hi: int = TRAIN_STEPS_HI,
                step_count: int = 0,
-               use_checkpoint: bool = True) -> tuple[np.ndarray, float]:
+               use_checkpoint: bool = False) -> tuple[np.ndarray, float]:
     """Run one training step (a single unrolled CA rollout + gradient update).
 
     Returns the final states (numpy on CPU) and the mean loss of this batch.
 
     ``use_checkpoint=True`` wraps every CA step in ``torch.utils.checkpoint``
     so intermediate activations are NOT retained for backward -- they are
-    re-computed on the fly. A long 96-step rollout then fits comfortably
-    in 16 GB VRAM (otherwise ~5 GB of activations are kept). RNG state is
-    preserved by ``use_reentrant=False`` so the fire-rate mask sampled in
-    forward is reproduced identically during re-computation in backward.
+    re-computed on the fly (≈2x slower, half the activation memory).
+    It previously defaulted to True to fit a 96-step rollout in tight VRAM,
+    but on a 16 GB CUDA card the tiny ~8.3K-parameter model uses <1 GB of
+    activations across 96 steps, so the default is now False for ~2x speedup.
+    If you are VRAM-constrained, pass ``use_checkpoint=True`` explicitly.
+    RNG state is preserved by ``use_reentrant=False`` so the fire-rate mask
+    sampled in forward is reproduced identically during re-computation.
     """
     from torch.utils.checkpoint import checkpoint
 

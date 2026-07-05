@@ -11,11 +11,11 @@ import torch
 from PIL import Image
 
 CHANNEL_N = 16
-TARGET_SIZE = 256                # full target area (raised from 192 to keep
-                                 # more of the source image's native detail;
-                                 # 4060 Ti 16GB easily handles GRID=288)
-TARGET_PADDING = 16              # 256 + 2*16 = 288
-GRID_SIZE = TARGET_SIZE + 2 * TARGET_PADDING   # 288
+TARGET_SIZE = 128               # full target area. Distill's original is 40,
+                                 # but 128 keeps usable detail for sprites and
+                                 # runs ~3x faster than 256 (GRID 160 vs 288).
+TARGET_PADDING = 16             # 128 + 2*16 = 160
+GRID_SIZE = TARGET_SIZE + 2 * TARGET_PADDING   # 160
 
 
 # --------------------------------------------------------------------------- #
