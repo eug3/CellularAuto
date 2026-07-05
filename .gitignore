@@ -20,4 +20,4 @@ out_frames/
 # Trained models are large; keep the directory but ignore stray .pth files
 # (committed sample models live in models/ and may be force-added).
 models/*.pth
-models/*_loss.json
+models/*.json

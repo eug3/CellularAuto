@@ -11,9 +11,10 @@ import torch
 from PIL import Image
 
 CHANNEL_N = 16
-TARGET_SIZE = 40
-TARGET_PADDING = 16              # 40 + 2*16 = 72
-GRID_SIZE = TARGET_SIZE + 2 * TARGET_PADDING   # 72
+TARGET_SIZE = 192                # full target area (was 40; sprite frames have
+                                 # high detail and need more pixels)
+TARGET_PADDING = 16              # 192 + 2*16 = 224
+GRID_SIZE = TARGET_SIZE + 2 * TARGET_PADDING   # 224
 
 
 # --------------------------------------------------------------------------- #
@@ -78,6 +79,49 @@ def load_target(image_path: str,
     grid[p:p + target_size, p:p + target_size, :4] = rgba
 
     t = torch.from_numpy(grid).permute(2, 0, 1).unsqueeze(0).contiguous()
+    if device is not None:
+        t = t.to(device)
+    return t
+
+
+# --------------------------------------------------------------------------- #
+# Multi-stage targets (curriculum / morph evolution)
+# --------------------------------------------------------------------------- #
+def load_stage_targets(image_path: str,
+                       n_stages: int = 11,
+                       target_size: int = TARGET_SIZE,
+                       device=None) -> torch.Tensor:
+    """Load a horizontal-stacked sprite sheet (e.g. all.png) and split it
+    into ``n_stages`` equal-width frames.
+
+    Returns a tensor of shape ``[n_stages, CHANNEL_N, GRID_SIZE, GRID_SIZE]``
+    in the same RGBA-premultiplied format as :func:`load_target`.
+    """
+    src = Image.open(image_path).convert("RGBA")
+    W, H = src.size
+    frames = []
+    for i in range(n_stages):
+        x0 = i * (W / n_stages)
+        x1 = (i + 1) * (W / n_stages) if i < n_stages - 1 else float(W)
+        box = (int(round(x0)), 0, int(round(x1)), H)
+        crop = src.crop(box)
+        crop.load()
+        frame = _fit_into(crop, target_size)
+        arr = np.asarray(frame, dtype=np.float32) / 255.0
+
+        rgb = arr[..., :3]
+        alpha = arr[..., 3:4]
+        rgb = rgb * alpha
+        rgba = np.concatenate([rgb, alpha], axis=-1)
+
+        p = TARGET_PADDING
+        g = GRID_SIZE
+        grid = np.zeros((g, g, CHANNEL_N), dtype=np.float32)
+        grid[p:p + target_size, p:p + target_size, :4] = rgba
+        frames.append(grid)
+
+    stacked = np.stack(frames, axis=0)                      # [N, g, g, C]
+    t = torch.from_numpy(stacked).permute(0, 3, 1, 2).contiguous()
     if device is not None:
         t = t.to(device)
     return t

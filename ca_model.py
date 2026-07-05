@@ -77,15 +77,19 @@ def get_living_mask(x: torch.Tensor, threshold: float = 0.1) -> torch.Tensor:
 
 
 class UpdateCNN(nn.Module):
-    """The learnable cell-update network: 1x1 conv 48->128 (ReLU) -> 1x1 conv 128->16.
+    """The learnable cell-update network: 1x1 conv (48+extra)->128 (ReLU) -> 1x1 conv 128->16.
+
+    ``extra_in`` adds extra input channels beyond the standard perception
+    vector (used by :class:`StageCAModel` to inject the stage one-hot).
 
     Last-layer weights are zero-initialised so the model output is zero at
     init (do-nothing behaviour -> seed stays unchanged).
     """
 
-    def __init__(self, channel_n: int = CHANNEL_N, hidden_n: int = 128):
+    def __init__(self, channel_n: int = CHANNEL_N, hidden_n: int = 128,
+                 extra_in: int = 0):
         super().__init__()
-        self.conv1 = nn.Conv2d(channel_n * 3, hidden_n, kernel_size=1)
+        self.conv1 = nn.Conv2d(channel_n * 3 + extra_in, hidden_n, kernel_size=1)
         self.conv2 = nn.Conv2d(hidden_n, channel_n, kernel_size=1)
         nn.init.zeros_(self.conv2.weight)
         nn.init.zeros_(self.conv2.bias)
@@ -132,3 +136,73 @@ class CAModel(nn.Module):
     def step(self, x: torch.Tensor, angle: float = 0.0) -> torch.Tensor:
         """Convenience inference step (no grad, default fire rate)."""
         return self.forward(x, angle=angle)
+
+
+# --------------------------------------------------------------------------- #
+# Stage-conditioned CA model (multi-target morph evolution)
+# --------------------------------------------------------------------------- #
+class StageCAModel(nn.Module):
+    """Stage-aware Neural CA.
+
+    Same perception/masking as :class:`CAModel`, but the update network is
+    fed a per-stage one-hot vector tiled across space, telling it which of
+    ``stage_n`` target shapes it should currently draw.
+
+    Stage is supplied at call time as an integer ``stage`` in ``[0, stage_n-1]``
+    OR as a pre-broadcast ``stage_cond`` tensor ``[B, stage_n, H, W]``.
+    """
+
+    def __init__(self,
+                 channel_n: int = CHANNEL_N,
+                 stage_n: int = 11,
+                 hidden_n: int = 128,
+                 fire_rate: float = 0.5):
+        super().__init__()
+        self.channel_n = channel_n
+        self.stage_n = stage_n
+        self.fire_rate = fire_rate
+        self.update_net = UpdateCNN(channel_n, hidden_n, extra_in=stage_n)
+
+    def encode_stage(self, stage: int, batch: int, h: int, w: int,
+                     device=None, dtype=torch.float32) -> torch.Tensor:
+        """Return a one-hot stage tensor ``[B, stage_n, H, W]``."""
+        if stage < 0 or stage >= self.stage_n:
+            raise ValueError(f"stage {stage} out of range [0, {self.stage_n})")
+        cond = torch.zeros(batch, self.stage_n, 1, 1, device=device, dtype=dtype)
+        cond[:, stage, 0, 0] = 1.0
+        return cond.expand(batch, self.stage_n, h, w).contiguous()
+
+    def forward(self,
+                x: torch.Tensor,
+                stage: Optional[int] = None,
+                stage_cond: Optional[torch.Tensor] = None,
+                fire_rate: Optional[float] = None,
+                angle: float = 0.0,
+                step_size: float = 1.0) -> torch.Tensor:
+        if fire_rate is None:
+            fire_rate = self.fire_rate
+        if stage_cond is None:
+            if stage is None:
+                raise ValueError("Either stage or stage_cond must be provided")
+            b, _, h, w = x.shape
+            stage_cond = self.encode_stage(stage, b, h, w,
+                                           device=x.device, dtype=x.dtype)
+
+        pre = get_living_mask(x)
+
+        y = perceive(x, angle)
+        full_in = torch.cat([y, stage_cond], dim=1)
+        dx = self.update_net(full_in) * step_size
+
+        mask = (torch.rand(x.shape[0], 1, x.shape[2], x.shape[3],
+                           device=x.device, dtype=x.dtype) <= fire_rate).float()
+        x = x + dx * mask
+
+        post = get_living_mask(x)
+        life = pre * post
+        return x * life
+
+    @torch.no_grad()
+    def step(self, x: torch.Tensor, stage: int, angle: float = 0.0) -> torch.Tensor:
+        """Convenience inference step (no grad, default fire rate)."""
+        return self.forward(x, stage=stage, angle=angle)
