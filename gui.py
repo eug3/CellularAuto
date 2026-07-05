@@ -534,7 +534,7 @@ class CAApp(tk.Tk):
                     on_snapshot=snap,
                     snapshot_preview_every=25,
                     snapshot_preview_steps=80,
-                    force_cpu=True,
+                    force_cpu=False,
                 )
                 self.after(0, lambda: self._on_staged_done(ca, sched,
                                                            save_path, sched_path))

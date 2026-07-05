@@ -11,10 +11,11 @@ import torch
 from PIL import Image
 
 CHANNEL_N = 16
-TARGET_SIZE = 192                # full target area (was 40; sprite frames have
-                                 # high detail and need more pixels)
-TARGET_PADDING = 16              # 192 + 2*16 = 224
-GRID_SIZE = TARGET_SIZE + 2 * TARGET_PADDING   # 224
+TARGET_SIZE = 256                # full target area (raised from 192 to keep
+                                 # more of the source image's native detail;
+                                 # 4060 Ti 16GB easily handles GRID=288)
+TARGET_PADDING = 16              # 256 + 2*16 = 288
+GRID_SIZE = TARGET_SIZE + 2 * TARGET_PADDING   # 288
 
 
 # --------------------------------------------------------------------------- #
@@ -46,9 +47,18 @@ def get_device(prefer: str = "auto") -> torch.device:
 # Target image loading
 # --------------------------------------------------------------------------- #
 def _fit_into(img: Image.Image, size: int) -> Image.Image:
-    """Scale image (keep aspect) and center it on a transparent ``size x size`` canvas."""
-    thumb = img.copy()
-    thumb.thumbnail((size, size), Image.LANCZOS)
+    """Scale image (keep aspect) and center it on a transparent ``size x size`` canvas.
+
+    If the source already fits inside ``size x size`` it is kept at its
+    native resolution (no upscale, no downscale) -- this preserves maximum
+    detail for low-res assets. Larger sources are downscaled with LANCZOS.
+    """
+    src = img.copy()
+    if src.width <= size and src.height <= size:
+        thumb = src
+    else:
+        thumb = src
+        thumb.thumbnail((size, size), Image.LANCZOS)
     canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     off_x = (size - thumb.width) // 2
     off_y = (size - thumb.height) // 2

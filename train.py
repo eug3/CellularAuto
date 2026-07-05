@@ -94,11 +94,21 @@ def train_step(ca: CAModel,
                grad_eps: float = GRAD_EPS,
                step_lo: int = TRAIN_STEPS_LO,
                step_hi: int = TRAIN_STEPS_HI,
-               step_count: int = 0) -> tuple[torch.Tensor, float]:
+               step_count: int = 0,
+               use_checkpoint: bool = True) -> tuple[np.ndarray, float]:
     """Run one training step (a single unrolled CA rollout + gradient update).
 
     Returns the final states (numpy on CPU) and the mean loss of this batch.
+
+    ``use_checkpoint=True`` wraps every CA step in ``torch.utils.checkpoint``
+    so intermediate activations are NOT retained for backward -- they are
+    re-computed on the fly. A long 96-step rollout then fits comfortably
+    in 16 GB VRAM (otherwise ~5 GB of activations are kept). RNG state is
+    preserved by ``use_reentrant=False`` so the fire-rate mask sampled in
+    forward is reproduced identically during re-computation in backward.
     """
+    from torch.utils.checkpoint import checkpoint
+
     steps = int(torch.randint(step_lo, step_hi, (1,)).item())
     x = x0
 
@@ -107,8 +117,14 @@ def train_step(ca: CAModel,
         g["lr"] = lr_sched(step_count)
 
     optimizer.zero_grad(set_to_none=True)
-    for _ in range(steps):
-        x = ca(x)
+
+    if use_checkpoint:
+        for _ in range(steps):
+            x = checkpoint(ca, x, use_reentrant=False)
+    else:
+        for _ in range(steps):
+            x = ca(x)
+
     losses = loss_fn(x, target)
     loss = torch.mean(losses)
     loss.backward()
@@ -152,18 +168,17 @@ def train(target: torch.Tensor,
           on_progress: Optional[Callable[[int, int, float], None]] = None,
           snapshot_every: int = 200,
           save_path: Optional[str] = None,
-          force_cpu: bool = True) -> CAModel:
+          force_cpu: bool = False) -> CAModel:
     """Train a CAModel to grow/stabilise ``target``.
 
     ``target`` is a torch ``[1, CHANNEL_N, H, W]`` premultiplied tensor.
     ``on_progress(epoch, total, loss)`` is called every step (e.g. for GUI).
     Returns the trained model (located on ``device``).
 
-    NOTE: by default ``force_cpu=True``. Backprop through the long CA rollout
-    is numerically unstable on Apple's MPS backend (the trained model
-    collapses to a "killer" rule), while it works perfectly on CPU. CPU is
-    also plenty fast for this ~8K-parameter model. Set ``force_cpu=False``
-    to attempt the requested ``device`` directly.
+    NOTE: ``force_cpu`` historically defaulted to True to dodge numerical
+    instability on Apple's MPS backend. On CUDA it is both fast and stable,
+    so the default is now False (use the requested ``device`` directly).
+    If you hit instability on MPS, pass ``force_cpu=True`` explicitly.
     """
     if force_cpu:
         train_device = torch.device("cpu")

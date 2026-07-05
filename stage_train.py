@@ -51,13 +51,26 @@ def stage_train_step(ca: StageCAModel,
                      optimizer: torch.optim.Optimizer,
                      grad_eps: float = GRAD_EPS,
                      step_lo: int = TRAIN_STEPS_LO,
-                     step_hi: int = TRAIN_STEPS_HI) -> tuple[np.ndarray, float]:
-    """One unrolled rollout + gradient update for a single stage."""
+                     step_hi: int = TRAIN_STEPS_HI,
+                     use_checkpoint: bool = True) -> tuple[np.ndarray, float]:
+    """One unrolled rollout + gradient update for a single stage.
+
+    ``use_checkpoint=True`` wraps every step in ``torch.utils.checkpoint`` to
+    avoid keeping ~5 GB of intermediate activations during a 96-step rollout
+    on a 16 GB GPU. RNG state is preserved via ``use_reentrant=False`` so the
+    fire-rate mask is reproduced identically during backward.
+    """
+    from torch.utils.checkpoint import checkpoint
+
     steps = int(torch.randint(step_lo, step_hi, (1,)).item())
     optimizer.zero_grad(set_to_none=True)
     x = x0
-    for _ in range(steps):
-        x = ca(x, stage=stage)
+    if use_checkpoint:
+        for _ in range(steps):
+            x = checkpoint(ca, x, stage=stage, use_reentrant=False)
+    else:
+        for _ in range(steps):
+            x = ca(x, stage=stage)
     losses = loss_fn(x, target)                   # [B]
     loss = torch.mean(losses)
     loss.backward()
@@ -130,7 +143,7 @@ def train_staged(targets: torch.Tensor,
                  on_snapshot: Optional[Callable[[int, int, "np.ndarray"], None]] = None,
                  snapshot_preview_every: int = 25,
                  snapshot_preview_steps: int = TRAIN_STEPS_HI,
-                 force_cpu: bool = True) -> tuple[StageCAModel, Schedule]:
+                 force_cpu: bool = False) -> tuple[StageCAModel, Schedule]:
     """Curriculum-train a :class:`StageCAModel`.
 
     ``targets``: ``[n_stages, CHANNEL_N, H, W]``.

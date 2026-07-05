@@ -90,7 +90,7 @@ def cmd_staged_train(args):
         snapshot_every=args.snapshot_every,
         save_path=save_path,
         schedule_path=schedule_path,
-        force_cpu=True,
+        force_cpu=False,
     )
     print("Done. Staged model at", save_path)
     print("       Schedule at   ", schedule_path)
