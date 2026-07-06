@@ -153,7 +153,7 @@ def main():
                         help="number of horizontal frames (default 11)")
     staged.add_argument("--epochs-per-stage", type=int, default=4000,
                         help="max epochs per stage before giving up")
-    staged.add_argument("--threshold", type=float, default=5e-3,
+    staged.add_argument("--threshold", type=float, default=1.6e-3,
                         help="loss threshold below which a stage is considered converged")
     staged.add_argument("--step-factor", type=float, default=1.5,
                         help="inference-step multiplier over converge epochs (default 1.5)")

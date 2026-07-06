@@ -240,7 +240,7 @@ class CAApp(tk.Tk):
         ttk.Spinbox(hp, from_=50, to=20000, increment=200, width=6,
                     textvariable=self.st_eps_var).grid(row=0, column=3)
         ttk.Label(hp, text="Threshold:").grid(row=1, column=0, sticky=tk.W)
-        self.st_thr_var = tk.DoubleVar(value=5e-3)
+        self.st_thr_var = tk.DoubleVar(value=1.6e-3)
         ttk.Entry(hp, textvariable=self.st_thr_var, width=6).grid(
             row=1, column=1, padx=4)
         ttk.Label(hp, text="Step×:").grid(row=1, column=2, sticky=tk.W)

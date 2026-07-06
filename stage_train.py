@@ -34,7 +34,7 @@ from train import (BATCH_SIZE, DAMAGE_N, FIRE_RATE, GRAD_EPS, LR,
                    make_lr_schedule)
 
 N_STAGE = 11
-DEFAULT_THRESHOLD = 5e-3          # mean target MSE before moving to next stage
+DEFAULT_THRESHOLD = 1.6e-3        # mean target MSE before moving to next stage
 DEFAULT_STAGE_MAX_EPOCHS = 4000   # safety cap per stage
 DEFAULT_STEP_FACTOR = 1.5         # 1.5x extra steady-state steps at inference
 DEFAULT_SAVE_NAME = "staged"
